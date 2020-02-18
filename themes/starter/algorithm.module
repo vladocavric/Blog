@@ -1,0 +1,851 @@
+<?php
+
+use Drupal\paragraphs\Entity\Paragraph;
+use Drupal\taxonomy\Entity\Term;
+use \Drupal\Core\Form\FormStateInterface;
+use Drupal\node\Entity\Node;
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function algorithm_preprocess_node(&$variables) {
+  if ($variables['node']->getType() == 'algorithm' && $variables['view_mode'] == 'full') {
+    if ($variables['node']->get('field_sublagorithm')->getValue()) {
+      $sublagorithms = $variables['node']->get('field_sublagorithm')
+        ->getValue();
+      foreach ($sublagorithms as $sublagorithm) {
+        $subalgorithm_title = get_title_from_nid($sublagorithm['target_id']);
+        $subs[] = $sublagorithm['target_id'];
+        $variables['subs'][] = $sublagorithm['target_id'];
+        $variables['subalgorithms'][] = $subalgorithm_title;
+      }
+    }
+
+// get main alg nid and pass it to check_subalgorithm function to get a proper delta
+    $main_alg = \Drupal::routeMatch()->getParameter('node');
+    if ($main_alg instanceof \Drupal\node\NodeInterface) {
+      $mainnid = $main_alg->id();
+    }
+
+    // Add counter
+    $variables['counter'] = 0;
+    $is_subalgorithm = check_subalgorithm($variables['node']->id(), $mainnid);
+    if (!empty($is_subalgorithm)) {
+      $parent_alg = get_main_algorithm($variables['node']->id());
+      $parent_node = Node::load($parent_alg);
+      $mainalg_subs = $parent_node->get('field_sublagorithm')
+        ->getValue();
+      foreach ($mainalg_subs as $mainalg_sub) {
+        $subs[] = $mainalg_sub['target_id'];
+        $variables['mainsubs'][] = $mainalg_sub['target_id'];
+      }
+      $variables['counter'] = ($is_subalgorithm[0]->delta + 1)*100;
+    }
+    else{
+      $variables['ismain'] = 1;
+    }
+
+    $main_row = $variables['node']->get('field_main_row')->referencedEntities();
+    //item1 values and variables
+    foreach ($main_row as $key => $row) {
+      //field_number_of_items
+      $box_number = $main_row[$key]->get('field_number_of_items')
+        ->getValue()[0]['value'];
+      if (!empty($main_row[$key]->get('field_item_1')
+        ->getValue()[0]['target_id'])) {
+        $item1_id = $main_row[$key]->get('field_item_1')
+          ->getValue()[0]['target_id'];
+        $item1 = Paragraph::load($item1_id);
+        $item1_title = !empty($item1->get('field_item_title')
+          ->getValue()[0]['value']) ? $item1->get('field_item_title')
+          ->getValue()[0]['value'] : '';
+        $item1_type_tid = !empty($item1->get('field_type')
+          ->getValue()[0]['target_id']) ? ($item1->get('field_type')
+          ->getValue()[0]['target_id']) : '';
+        $item1_info = !empty($item1->get('field_info')
+          ->getValue()[0]['value']) ? $item1->get('field_info')
+          ->getValue()[0]['value'] : '';
+        $item1_link = !empty($item1->get('field_link')
+          ->getValue()[0]['value']) ? http_check($item1->get('field_link')
+          ->getValue()[0]['value']) : '';
+        $item1_subalgorithm_nid = !empty($item1->get('field_sub_algorithm')
+          ->getValue()[0]['target_id']) ? $item1->get('field_sub_algorithm')
+          ->getValue()[0]['target_id'] : '';
+        $connections = ($item1->get('field_connections')->getValue());
+        //connections variables and values for item1
+        foreach ($connections as $i => $value) {
+          $item1_connection = Paragraph::load($value['target_id']);
+          if (!empty( $item1_connection->get('field_destination_row')
+            ->getValue()[0]['target_id'])) {
+          $item1_connection_label = !empty($item1_connection->get('field_label')
+            ->getValue()[0]['value']) ? $item1_connection->get('field_label')
+            ->getValue()[0]['value'] : '';
+          $variables['rows']['row' . $key]['item1']['item_connections'][$i]['label'] = $item1_connection_label;
+          if (isset($item1_connection->get('field_line_type')
+              ->getValue()[0]['target_id'])) {
+            $line_type_tid = $item1_connection->get('field_line_type')
+              ->getValue()[0]['target_id'];
+            $line_type = get_term_name_by_tid($line_type_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['line_type'] = $line_type;
+          }
+          if (isset($item1_connection->get('field_direction')
+              ->getValue()[0]['target_id'])) {
+            $direction_tid = $item1_connection->get('field_direction')
+              ->getValue()[0]['target_id'];
+            $direction = get_term_name_by_tid($direction_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['direction'] = $direction;
+          }
+          if (isset($item1_connection->get('field_line_curve')
+              ->getValue()[0]['target_id'])) {
+            $curve_tid = $item1_connection->get('field_line_curve')
+              ->getValue()[0]['target_id'];
+            $curve = get_term_name_by_tid($curve_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['line_curve'] = $curve;
+          }
+          if (isset($item1_connection->get('field_destination_row')
+              ->getValue()[0]['target_id'])) {
+            $destination_row_tid = $item1_connection->get('field_destination_row')
+              ->getValue()[0]['target_id'];
+            $destination_row = get_term_name_by_tid($destination_row_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+          }
+          if (isset($item1_connection->get('field_destination_item')
+              ->getValue()[0]['target_id'])) {
+            $destination_item_tid = $item1_connection->get('field_destination_item')
+              ->getValue()[0]['target_id'];
+            $destination_item = get_term_name_by_tid($destination_item_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+          }
+          if (isset($item1_connection->get('field_connection_point_start')
+              ->getValue()[0]['target_id'])) {
+            $connection_point_start_tid = $item1_connection->get('field_connection_point_start')
+              ->getValue()[0]['target_id'];
+            $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+          }
+          if (isset($item1_connection->get('field_connection_point_end')
+              ->getValue()[0]['target_id'])) {
+            $connection_point_end_tid = $item1_connection->get('field_connection_point_end')
+              ->getValue()[0]['target_id'];
+            $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+            $variables['rows']['row' . $key]['item1']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+          }
+          if (isset($item1_connection->get('field_destination_row')
+              ->getValue()[0]['target_id'])) {
+            // $variables['rows']['row' . $key]['item1']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item1_connection_label . '"},';
+          }
+          else {
+            // $variables['rows']['row' . $key]['item1']['item_connections']['merged'] = '';
+          }
+        }
+      }
+        // $variables['rows']['row' . $key]['item1']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item1']['item_connections']['merged'] . '}';
+        // $variables['rows']['row' . $key]['item1']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item1']['item_connections']['merged']);
+
+        $item1_subalgorithm = $item1_subalgorithm_nid ? $item1_subalgorithm_nid : '';
+        $item1_type = $item1_type_tid ? get_term_name_by_tid($item1_type_tid) : '';
+        $variables['rows']['row' . $key]['item1']['item_type'] = $item1_type;
+        $variables['rows']['row' . $key]['item1']['item_title'] = $item1_title;
+        $variables['rows']['row' . $key]['item1']['item_info'] = $item1_info;
+        $item_info = [
+          '#type' => 'processed_text',
+          '#format'=>  'full_html',
+          '#text' => $item1_info
+        ];
+        $variables['rows']['row' . $key]['item1']['item_info'] = render($item_info);
+        $variables['rows']['row' . $key]['item1']['item_link'] = $item1_link;
+        $variables['rows']['row' . $key]['item1']['item_subalgorithm'] = $item1_subalgorithm;
+
+        if ($variables['node']->get('field_sublagorithm')->getValue()) {
+          $sublagorithms = $variables['node']->get('field_sublagorithm')
+            ->getValue();
+          foreach ($sublagorithms as $sublagorithm) {
+            if($sublagorithm['target_id'] == $item1_subalgorithm) {
+              $variables['rows']['row' . $key]['item1']['class'] = 'internal';
+              break;
+            }
+          }
+        }
+        else{
+          $variables['rows']['row' . $key]['item1']['class'] = 'external';
+        }
+        //end of item1
+      }
+
+      //item2 values and variables
+      if (!empty($main_row[$key]->get('field_item_2')
+        ->getValue()[0]['target_id'])) {
+        $item2_id = $main_row[$key]->get('field_item_2')
+          ->getValue()[0]['target_id'];
+        $item2 = Paragraph::load($item2_id);
+        $item2_title = !empty($item2->get('field_item_title')
+          ->getValue()[0]['value']) ? $item2->get('field_item_title')
+          ->getValue()[0]['value'] : '';
+        $item2_type_tid = !empty($item2->get('field_type')
+          ->getValue()[0]['target_id']) ? ($item2->get('field_type')
+          ->getValue()[0]['target_id']) : '';
+        $item2_info = !empty($item2->get('field_info')
+          ->getValue()[0]['value']) ? $item2->get('field_info')
+          ->getValue()[0]['value'] : '';
+        $item2_link = !empty($item2->get('field_link')
+          ->getValue()[0]['value']) ? http_check($item2->get('field_link')
+          ->getValue()[0]['value']) : '';
+        $item2_subalgorithm_nid = !empty($item2->get('field_sub_algorithm')
+          ->getValue()[0]['target_id']) ? $item2->get('field_sub_algorithm')
+          ->getValue()[0]['target_id'] : '';
+        if ($item2->get('field_connections')
+          ->getValue()) {
+          $connections = $item2->get('field_connections')
+            ->getValue();
+          foreach ($connections as $i => $value) {
+            $item2_connection = Paragraph::load($value['target_id']);
+            if (!empty( $item2_connection->get('field_destination_row')
+              ->getValue()[0]['target_id'])) {
+            $item2_connection_label = !empty($item2_connection->get('field_label')
+              ->getValue()[0]['value']) ? $item2_connection->get('field_label')
+              ->getValue()[0]['value'] : '';
+            $variables['rows']['row' . $key]['item2']['item_connections'][$i]['label'] = $item2_connection_label;
+            if (isset($item2_connection->get('field_line_type')
+                ->getValue()[0]['target_id'])) {
+              $line_type_tid = $item2_connection->get('field_line_type')
+                ->getValue()[0]['target_id'];
+              $line_type = get_term_name_by_tid($line_type_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['line_type'] = $line_type;
+            }
+            if (isset($item2_connection->get('field_direction')
+                ->getValue()[0]['target_id'])) {
+              $direction_tid = $item2_connection->get('field_direction')
+                ->getValue()[0]['target_id'];
+              $direction = get_term_name_by_tid($direction_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['direction'] = $direction;
+            }
+            if (isset($item2_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              $destination_row_tid = $item2_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'];
+              $destination_row = get_term_name_by_tid($destination_row_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+            }
+            if (isset($item2_connection->get('field_destination_item')
+                ->getValue()[0]['target_id'])) {
+              $destination_item_tid = $item2_connection->get('field_destination_item')
+                ->getValue()[0]['target_id'];
+              $destination_item = get_term_name_by_tid($destination_item_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+            }
+            if (isset($item2_connection->get('field_line_curve')
+                ->getValue()[0]['target_id'])) {
+              $curve_tid = $item2_connection->get('field_line_curve')
+                ->getValue()[0]['target_id'];
+              $curve = get_term_name_by_tid($curve_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['line_curve'] = $curve;
+            }
+            if (isset($item2_connection->get('field_connection_point_start')
+                ->getValue()[0]['target_id'])) {
+              $connection_point_start_tid = $item2_connection->get('field_connection_point_start')
+                ->getValue()[0]['target_id'];
+              $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+            }
+            if (isset($item2_connection->get('field_connection_point_end')
+                ->getValue()[0]['target_id'])) {
+              $connection_point_end_tid = $item2_connection->get('field_connection_point_end')
+                ->getValue()[0]['target_id'];
+              $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+              $variables['rows']['row' . $key]['item2']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+            }
+            if (isset($item2_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              // $variables['rows']['row' . $key]['item2']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item2_connection_label . '"},';
+            }
+            else {
+              // $variables['rows']['row' . $key]['item2']['item_connections']['merged'] = '';
+            }
+          }
+        }
+        }
+        // $variables['rows']['row' . $key]['item2']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item2']['item_connections']['merged'] . '}';
+        // $variables['rows']['row' . $key]['item2']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item2']['item_connections']['merged']);
+        $item2_subalgorithm = $item2_subalgorithm_nid ? $item2_subalgorithm_nid : '';
+        $item2_type = $item2_type_tid ? get_term_name_by_tid($item2_type_tid) : '';
+        $variables['rows']['row' . $key]['item2']['item_type'] = $item2_type;
+        $variables['rows']['row' . $key]['item2']['item_title'] = $item2_title;
+        $variables['rows']['row' . $key]['item2']['item_info'] = $item2_info;
+        $item_info = [
+          '#type' => 'processed_text',
+          '#format'=>  'full_html',
+          '#text' => $item2_info
+        ];
+        $variables['rows']['row' . $key]['item2']['item_info'] = render($item_info);
+        $variables['rows']['row' . $key]['item2']['item_link'] = $item2_link;
+        $variables['rows']['row' . $key]['item2']['item_subalgorithm'] = $item2_subalgorithm;
+        if ($variables['node']->get('field_sublagorithm')->getValue()) {
+          $sublagorithms = $variables['node']->get('field_sublagorithm')
+            ->getValue();
+          foreach ($sublagorithms as $sublagorithm) {
+            if($sublagorithm['target_id'] == $item2_subalgorithm) {
+              $variables['rows']['row' . $key]['item2']['class'] = 'internal';
+              break;
+            }
+            else{
+              $variables['rows']['row' . $key]['item2']['class'] = 'external';
+            }
+          }
+        }
+        //end of item2
+      }
+      //begin of item3
+      if (!empty($main_row[$key]->get('field_item_3')
+        ->getValue()[0]['target_id'])) {
+        $item3_id = $main_row[$key]->get('field_item_3')
+          ->getValue()[0]['target_id'];
+        $item3 = Paragraph::load($item3_id);
+        $item3_title = !empty($item3->get('field_item_title')
+          ->getValue()[0]['value']) ? $item3->get('field_item_title')
+          ->getValue()[0]['value'] : '';
+        $item3_type_tid = !empty($item3->get('field_type')
+          ->getValue()[0]['target_id']) ? ($item3->get('field_type')
+          ->getValue()[0]['target_id']) : '';
+        $item3_info = !empty($item3->get('field_info')
+          ->getValue()[0]['value']) ? $item3->get('field_info')
+          ->getValue()[0]['value'] : '';
+        $item3_link = !empty($item3->get('field_link')
+          ->getValue()[0]['value']) ? http_check($item3->get('field_link')
+          ->getValue()[0]['value']) : '';
+        $item3_subalgorithm_nid = !empty($item3->get('field_sub_algorithm')
+          ->getValue()[0]['target_id']) ? $item3->get('field_sub_algorithm')
+          ->getValue()[0]['target_id'] : '';
+        if ($item3->get('field_connections')
+          ->getValue()) {
+          $connections = $item3->get('field_connections')
+            ->getValue();
+          //connections variables and values for item3
+          foreach ($connections as $i => $value) {
+            $item3_connection = Paragraph::load($value['target_id']);
+            if (!empty( $item3_connection->get('field_destination_row')
+              ->getValue()[0]['target_id'])) {
+            $item3_connection_label = !empty($item3_connection->get('field_label')
+              ->getValue()[0]['value']) ? $item3_connection->get('field_label')
+              ->getValue()[0]['value'] : '';
+            $variables['rows']['row' . $key]['item3']['item_connections'][$i]['label'] = $item3_connection_label;
+            if (isset($item3_connection->get('field_line_type')
+                ->getValue()[0]['target_id'])) {
+              $line_type_tid = $item3_connection->get('field_line_type')
+                ->getValue()[0]['target_id'];
+              $line_type = get_term_name_by_tid($line_type_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['line_type'] = $line_type;
+            }
+            if (isset($item3_connection->get('field_direction')
+                ->getValue()[0]['target_id'])) {
+              $direction_tid = $item3_connection->get('field_direction')
+                ->getValue()[0]['target_id'];
+              $direction = get_term_name_by_tid($direction_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['direction'] = $direction;
+            }
+            if (isset($item3_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              $destination_row_tid = $item3_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'];
+              $destination_row = get_term_name_by_tid($destination_row_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+            }
+            if (isset($item3_connection->get('field_destination_item')
+                ->getValue()[0]['target_id'])) {
+              $destination_item_tid = $item3_connection->get('field_destination_item')
+                ->getValue()[0]['target_id'];
+              $destination_item = get_term_name_by_tid($destination_item_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+            }
+            if (isset($item3_connection->get('field_line_curve')
+                ->getValue()[0]['target_id'])) {
+              $curve_tid = $item3_connection->get('field_line_curve')
+                ->getValue()[0]['target_id'];
+              $curve = get_term_name_by_tid($curve_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['line_curve'] = $curve;
+            }
+            if (isset($item3_connection->get('field_connection_point_start')
+                ->getValue()[0]['target_id'])) {
+              $connection_point_start_tid = $item3_connection->get('field_connection_point_start')
+                ->getValue()[0]['target_id'];
+              $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+            }
+            if (isset($item3_connection->get('field_connection_point_end')
+                ->getValue()[0]['target_id'])) {
+              $connection_point_end_tid = $item3_connection->get('field_connection_point_end')
+                ->getValue()[0]['target_id'];
+              $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+              $variables['rows']['row' . $key]['item3']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+            }
+            if (isset($item3_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              // $variables['rows']['row' . $key]['item3']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item3_connection_label . '"},';
+            }
+            else {
+              // $variables['rows']['row' . $key]['item3']['item_connections']['merged'] = '';
+            }
+          }
+        }
+        }
+        // $variables['rows']['row' . $key]['item3']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item3']['item_connections']['merged'] . '}';
+        // $variables['rows']['row' . $key]['item3']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item3']['item_connections']['merged']);
+        $item3_subalgorithm = $item3_subalgorithm_nid ? $item3_subalgorithm_nid : '';
+        $item3_type = $item3_type_tid ? get_term_name_by_tid($item3_type_tid) : '';
+        $variables['rows']['row' . $key]['item3']['item_type'] = $item3_type;
+        $variables['rows']['row' . $key]['item3']['item_title'] = $item3_title;
+        $variables['rows']['row' . $key]['item3']['item_info'] = $item3_info;
+        $item_info = [
+          '#type' => 'processed_text',
+          '#format'=>  'full_html',
+          '#text' => $item3_info
+        ];
+        $variables['rows']['row' . $key]['item3']['item_info'] = render($item_info);
+        $variables['rows']['row' . $key]['item3']['item_link'] = $item3_link;
+        $variables['rows']['row' . $key]['item3']['item_subalgorithm'] = $item3_subalgorithm;
+        if ($variables['node']->get('field_sublagorithm')->getValue()) {
+          $sublagorithms = $variables['node']->get('field_sublagorithm')
+            ->getValue();
+          foreach ($sublagorithms as $sublagorithm) {
+            if($sublagorithm['target_id'] == $item3_subalgorithm) {
+              $variables['rows']['row' . $key]['item3']['class'] = 'internal';
+              break;
+            }
+            else{
+              $variables['rows']['row' . $key]['item3']['class'] = 'external';
+            }
+          }
+        }
+        //end of item3
+      }
+      //begin of item4
+      if ($box_number != 3) {
+        if (!empty($main_row[$key]->get('field_item_4')
+          ->getValue()[0]['target_id'])) {
+          $item4_id = $main_row[$key]->get('field_item_4')
+            ->getValue()[0]['target_id'];
+          $item4 = Paragraph::load($item4_id);
+          $item4_title = !empty($item4->get('field_item_title')
+            ->getValue()[0]['value']) ? $item4->get('field_item_title')
+            ->getValue()[0]['value'] : '';
+          $item4_type_tid = !empty($item4->get('field_type')
+            ->getValue()[0]['target_id']) ? ($item4->get('field_type')
+            ->getValue()[0]['target_id']) : '';
+          $item4_info = !empty($item4->get('field_info')
+            ->getValue()[0]['value']) ? $item4->get('field_info')
+            ->getValue()[0]['value'] : '';
+          $item4_link = !empty($item4->get('field_link')
+            ->getValue()[0]['value']) ? http_check($item4->get('field_link')
+            ->getValue()[0]['value']) : '';
+          $item4_subalgorithm_nid = !empty($item4->get('field_sub_algorithm')
+            ->getValue()[0]['target_id']) ? $item4->get('field_sub_algorithm')
+            ->getValue()[0]['target_id'] : '';
+          if ($item4->get('field_connections')
+            ->getValue()) {
+            $connections = $item4->get('field_connections')
+              ->getValue();
+            //connections variables and values for item4
+            foreach ($connections as $i => $value) {
+              $item4_connection = Paragraph::load($value['target_id']);
+              if (!empty( $item4_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              $item4_connection_label = !empty($item4_connection->get('field_label')
+                ->getValue()[0]['value']) ? $item4_connection->get('field_label')
+                ->getValue()[0]['value'] : '';
+              $variables['rows']['row' . $key]['item4']['item_connections'][$i]['label'] = $item4_connection_label;
+              if (isset($item4_connection->get('field_line_type')
+                  ->getValue()[0]['target_id'])) {
+                $line_type_tid = $item4_connection->get('field_line_type')
+                  ->getValue()[0]['target_id'];
+                $line_type = get_term_name_by_tid($line_type_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['line_type'] = $line_type;
+              }
+              if (isset($item4_connection->get('field_direction')
+                  ->getValue()[0]['target_id'])) {
+                $direction_tid = $item4_connection->get('field_direction')
+                  ->getValue()[0]['target_id'];
+                $direction = get_term_name_by_tid($direction_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['direction'] = $direction;
+              }
+              if (isset($item4_connection->get('field_line_curve')
+                  ->getValue()[0]['target_id'])) {
+                $curve_tid = $item4_connection->get('field_line_curve')
+                  ->getValue()[0]['target_id'];
+                $curve = get_term_name_by_tid($curve_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['line_curve'] = $curve;
+              }
+
+              if (isset($item4_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'])) {
+                $destination_row_tid = $item4_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'];
+                $destination_row = get_term_name_by_tid($destination_row_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+              }
+              if (isset($item4_connection->get('field_destination_item')
+                  ->getValue()[0]['target_id'])) {
+                $destination_item_tid = $item4_connection->get('field_destination_item')
+                  ->getValue()[0]['target_id'];
+                $destination_item = get_term_name_by_tid($destination_item_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+              }
+              if (isset($item4_connection->get('field_connection_point_start')
+                  ->getValue()[0]['target_id'])) {
+                $connection_point_start_tid = $item4_connection->get('field_connection_point_start')
+                  ->getValue()[0]['target_id'];
+                $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+              }
+              if (isset($item4_connection->get('field_connection_point_end')
+                  ->getValue()[0]['target_id'])) {
+                $connection_point_end_tid = $item4_connection->get('field_connection_point_end')
+                  ->getValue()[0]['target_id'];
+                $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+                $variables['rows']['row' . $key]['item4']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+              }
+              if (isset($item4_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'])) {
+                // $variables['rows']['row' . $key]['item4']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item4_connection_label . '"},';
+              }
+              else {
+                // $variables['rows']['row' . $key]['item4']['item_connections']['merged'] = '';
+              }
+            }
+          }
+          }
+          // $variables['rows']['row' . $key]['item4']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item4']['item_connections']['merged'] . '}';
+          // $variables['rows']['row' . $key]['item4']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item4']['item_connections']['merged']);;
+          $item4_subalgorithm = $item4_subalgorithm_nid ? $item4_subalgorithm_nid : '';
+          $item4_type = $item4_type_tid ? get_term_name_by_tid($item4_type_tid) : '';
+          $variables['rows']['row' . $key]['item4']['item_type'] = $item4_type;
+          $variables['rows']['row' . $key]['item4']['item_title'] = $item4_title;
+          $variables['rows']['row' . $key]['item4']['item_info'] = $item4_info;
+          $item_info = [
+            '#type' => 'processed_text',
+            '#format'=>  'full_html',
+            '#text' => $item4_info
+          ];
+          $variables['rows']['row' . $key]['item4']['item_info'] = render($item_info);
+          $variables['rows']['row' . $key]['item4']['item_link'] = $item4_link;
+          $variables['rows']['row' . $key]['item4']['item_subalgorithm'] = $item4_subalgorithm;
+          if ($variables['node']->get('field_sublagorithm')->getValue()) {
+            $sublagorithms = $variables['node']->get('field_sublagorithm')
+              ->getValue();
+            foreach ($sublagorithms as $sublagorithm) {
+              if($sublagorithm['target_id'] == $item4_subalgorithm) {
+                $variables['rows']['row' . $key]['item4']['class'] = 'internal';
+                break;
+              }
+              else{
+                $variables['rows']['row' . $key]['item4']['class'] = 'external';
+              }
+            }
+          }
+          //end of item4
+        }
+      }
+      if ($box_number != 3 && $box_number != 4) {
+        if (!empty($main_row[$key]->get('field_item_5')
+          ->getValue()[0]['target_id'])) {
+          $item5_id = $main_row[$key]->get('field_item_5')
+            ->getValue()[0]['target_id'];
+          $item5 = Paragraph::load($item5_id);
+          $item5_title = !empty($item5->get('field_item_title')
+            ->getValue()[0]['value']) ? $item5->get('field_item_title')
+            ->getValue()[0]['value'] : '';
+          $item5_type_tid = !empty($item5->get('field_type')
+            ->getValue()[0]['target_id']) ? ($item5->get('field_type')
+            ->getValue()[0]['target_id']) : '';
+          $item5_info = !empty($item5->get('field_info')
+            ->getValue()[0]['value']) ? $item5->get('field_info')
+            ->getValue()[0]['value'] : '';
+          $item5_link = !empty($item5->get('field_link')
+            ->getValue()[0]['value']) ? http_check($item5->get('field_link')
+            ->getValue()[0]['value']) : '';
+          $item5_subalgorithm_nid = !empty($item5->get('field_sub_algorithm')
+            ->getValue()[0]['target_id']) ? $item5->get('field_sub_algorithm')
+            ->getValue()[0]['target_id'] : '';
+          if ($item5->get('field_connections')
+            ->getValue()) {
+            $connections = $item5->get('field_connections')
+              ->getValue();
+            //connections variables and values for item5
+            foreach ($connections as $i => $value) {
+              $item5_connection = Paragraph::load($value['target_id']);
+              if (!empty( $item5_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+              $item5_connection_label = !empty($item5_connection->get('field_label')
+                ->getValue()[0]['value']) ? $item5_connection->get('field_label')
+                ->getValue()[0]['value'] : '';
+              $variables['rows']['row' . $key]['item5']['item_connections'][$i]['label'] = $item5_connection_label;
+              if (isset($item5_connection->get('field_line_type')
+                  ->getValue()[0]['target_id'])) {
+                $line_type_tid = $item5_connection->get('field_line_type')
+                  ->getValue()[0]['target_id'];
+                $line_type = get_term_name_by_tid($line_type_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['line_type'] = $line_type;
+              }
+              if (isset($item5_connection->get('field_direction')
+                  ->getValue()[0]['target_id'])) {
+                $direction_tid = $item5_connection->get('field_direction')
+                  ->getValue()[0]['target_id'];
+                $direction = get_term_name_by_tid($direction_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['direction'] = $direction;
+              }
+              if (isset($item5_connection->get('field_line_curve')
+                  ->getValue()[0]['target_id'])) {
+                $curve_tid = $item5_connection->get('field_line_curve')
+                  ->getValue()[0]['target_id'];
+                $curve = get_term_name_by_tid($curve_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['line_curve'] = $curve;
+              }
+
+              if (isset($item5_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'])) {
+                $destination_row_tid = $item5_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'];
+                $destination_row = get_term_name_by_tid($destination_row_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+              }
+              if (isset($item5_connection->get('field_destination_item')
+                  ->getValue()[0]['target_id'])) {
+                $destination_item_tid = $item5_connection->get('field_destination_item')
+                  ->getValue()[0]['target_id'];
+                $destination_item = get_term_name_by_tid($destination_item_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+              }
+              if (isset($item5_connection->get('field_connection_point_start')
+                  ->getValue()[0]['target_id'])) {
+                $connection_point_start_tid = $item5_connection->get('field_connection_point_start')
+                  ->getValue()[0]['target_id'];
+                $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+              }
+              if (isset($item5_connection->get('field_connection_point_end')
+                  ->getValue()[0]['target_id'])) {
+                $connection_point_end_tid = $item5_connection->get('field_connection_point_end')
+                  ->getValue()[0]['target_id'];
+                $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+                $variables['rows']['row' . $key]['item5']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+              }
+              if (isset($item5_connection->get('field_destination_row')
+                  ->getValue()[0]['target_id'])) {
+                // $variables['rows']['row' . $key]['item5']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item5_connection_label . '"},';
+              }
+              else {
+                // $variables['rows']['row' . $key]['item5']['item_connections']['merged'] = '';
+              }
+            }
+          }
+          }
+          // $variables['rows']['row' . $key]['item5']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item5']['item_connections']['merged'] . '}';
+          // $variables['rows']['row' . $key]['item5']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item5']['item_connections']['merged']);;
+          $item5_subalgorithm = $item5_subalgorithm_nid ? $item5_subalgorithm_nid : '';
+          $item5_type = $item5_type_tid ? get_term_name_by_tid($item5_type_tid) : '';
+          $variables['rows']['row' . $key]['item5']['item_type'] = $item5_type;
+          $variables['rows']['row' . $key]['item5']['item_title'] = $item5_title;
+          $variables['rows']['row' . $key]['item5']['item_info'] = $item5_info;
+          $item_info = [
+            '#type' => 'processed_text',
+            '#format'=>  'full_html',
+            '#text' => $item5_info
+          ];
+          $variables['rows']['row' . $key]['item5']['item_info'] = render($item_info);
+          $variables['rows']['row' . $key]['item5']['item_link'] = $item5_link;
+          $variables['rows']['row' . $key]['item5']['item_subalgorithm'] = $item5_subalgorithm;
+          if ($variables['node']->get('field_sublagorithm')->getValue()) {
+            $sublagorithms = $variables['node']->get('field_sublagorithm')
+              ->getValue();
+            foreach ($sublagorithms as $sublagorithm) {
+              if($sublagorithm['target_id'] == $item5_subalgorithm) {
+                $variables['rows']['row' . $key]['item5']['class'] = 'internal';
+                break;
+              }
+              else{
+                $variables['rows']['row' . $key]['item5']['class'] = 'external';
+              }
+            }
+          }
+          //end of item5
+        }
+        if (!empty($main_row[$key]->get('field_item_6')
+          ->getValue()[0]['target_id'])) {
+          $item6_id = $main_row[$key]->get('field_item_6')
+            ->getValue()[0]['target_id'];
+          $item6 = Paragraph::load($item6_id);
+          $item6_title = !empty($item6->get('field_item_title')
+            ->getValue()[0]['value']) ? $item6->get('field_item_title')
+            ->getValue()[0]['value'] : '';
+          $item6_type_tid = !empty($item6->get('field_type')
+            ->getValue()[0]['target_id']) ? ($item6->get('field_type')
+            ->getValue()[0]['target_id']) : '';
+          $item6_info = !empty($item6->get('field_info')
+            ->getValue()[0]['value']) ? $item6->get('field_info')
+            ->getValue()[0]['value'] : '';
+          $item6_link = !empty($item6->get('field_link')
+            ->getValue()[0]['value']) ? http_check($item6->get('field_link')
+            ->getValue()[0]['value']) : '';
+          $item6_subalgorithm_nid = !empty($item6->get('field_sub_algorithm')
+            ->getValue()[0]['target_id']) ? $item6->get('field_sub_algorithm')
+            ->getValue()[0]['target_id'] : '';
+          if ($item6->get('field_connections')
+            ->getValue()) {
+            $connections = $item6->get('field_connections')
+              ->getValue();
+            //connections variables and values for item6
+            foreach ($connections as $i => $value) {
+              $item6_connection = Paragraph::load($value['target_id']);
+              if (!empty($item6_connection->get('field_destination_row')
+                ->getValue()[0]['target_id'])) {
+                $item6_connection_label = !empty($item6_connection->get('field_label')
+                  ->getValue()[0]['value']) ? $item6_connection->get('field_label')
+                  ->getValue()[0]['value'] : '';
+                $variables['rows']['row' . $key]['item6']['item_connections'][$i]['label'] = $item6_connection_label;
+                if (isset($item6_connection->get('field_line_type')
+                    ->getValue()[0]['target_id'])) {
+                  $line_type_tid = $item6_connection->get('field_line_type')
+                    ->getValue()[0]['target_id'];
+                  $line_type = get_term_name_by_tid($line_type_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['line_type'] = $line_type;
+                }
+                if (isset($item6_connection->get('field_direction')
+                    ->getValue()[0]['target_id'])) {
+                  $direction_tid = $item6_connection->get('field_direction')
+                    ->getValue()[0]['target_id'];
+                  $direction = get_term_name_by_tid($direction_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['direction'] = $direction;
+                }
+                if (isset($item6_connection->get('field_line_curve')
+                    ->getValue()[0]['target_id'])) {
+                  $curve_tid = $item6_connection->get('field_line_curve')
+                    ->getValue()[0]['target_id'];
+                  $curve = get_term_name_by_tid($curve_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['line_curve'] = $curve;
+                }
+                if (isset($item6_connection->get('field_destination_row')
+                    ->getValue()[0]['target_id'])) {
+                  $destination_row_tid = $item6_connection->get('field_destination_row')
+                    ->getValue()[0]['target_id'];
+                  $destination_row = get_term_name_by_tid($destination_row_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['destination_row'] = preg_replace("/[^0-9]/", "", $destination_row);
+                }
+                if (isset($item6_connection->get('field_destination_item')
+                    ->getValue()[0]['target_id'])) {
+                  $destination_item_tid = $item6_connection->get('field_destination_item')
+                    ->getValue()[0]['target_id'];
+                  $destination_item = get_term_name_by_tid($destination_item_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['destination_item'] = '-' . strtolower(str_replace(" ", "", $destination_item));
+                }
+                if (isset($item6_connection->get('field_connection_point_start')
+                    ->getValue()[0]['target_id'])) {
+                  $connection_point_start_tid = $item6_connection->get('field_connection_point_start')
+                    ->getValue()[0]['target_id'];
+                  $connection_point_start = get_term_name_by_tid($connection_point_start_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['connection_point_start'] = $connection_point_start;
+                }
+                if (isset($item6_connection->get('field_connection_point_end')
+                    ->getValue()[0]['target_id'])) {
+                  $connection_point_end_tid = $item6_connection->get('field_connection_point_end')
+                    ->getValue()[0]['target_id'];
+                  $connection_point_end = get_term_name_by_tid($connection_point_end_tid);
+                  $variables['rows']['row' . $key]['item6']['item_connections'][$i]['connection_point_end'] = $connection_point_end;
+                }
+                if (isset($item6_connection->get('field_destination_row')
+                    ->getValue()[0]['target_id'])) {
+                  // $variables['rows']['row' . $key]['item6']['item_connections']['merged'] .= '"' . ($i + 1) . '":{"target":".' . strtolower(str_replace(" ", "", $destination_row)) . '-' . strtolower(str_replace(" ", "", $destination_item)) . '","linetype":"' . $line_type . '","direction":"' . $direction . '","lineCurve":"' . $curve . '","sourceLinepos":"' . $connection_point_start . '","targetLinepos":"' . $connection_point_end . '","label":"' . $item6_connection_label . '"},';
+                }
+                else {
+                  // $variables['rows']['row' . $key]['item6']['item_connections']['merged'] = '';
+                }
+              }
+            }
+          }
+          // $variables['rows']['row' . $key]['item6']['item_connections']['merged'] = '{' . $variables['rows']['row' . $key]['item6']['item_connections']['merged'] . '}';
+          // $variables['rows']['row' . $key]['item6']['item_connections']['merged'] = str_replace("},}", "}}", $variables['rows']['row' . $key]['item6']['item_connections']['merged']);;
+          $item6_subalgorithm = $item6_subalgorithm_nid ? $item6_subalgorithm_nid : '';
+          $item6_type = $item6_type_tid ? get_term_name_by_tid($item6_type_tid) : '';
+          $variables['rows']['row' . $key]['item6']['item_type'] = $item6_type;
+          $variables['rows']['row' . $key]['item6']['item_title'] = $item6_title;
+          $variables['rows']['row' . $key]['item6']['item_info'] = $item6_info;
+          $item_info = [
+            '#type' => 'processed_text',
+            '#format'=>  'full_html',
+            '#text' => $item6_info
+          ];
+          $variables['rows']['row' . $key]['item6']['item_info'] = render($item_info);
+          $variables['rows']['row' . $key]['item6']['item_link'] = $item6_link;
+          $variables['rows']['row' . $key]['item6']['item_subalgorithm'] = $item6_subalgorithm;
+          if ($variables['node']->get('field_sublagorithm')->getValue()) {
+            $sublagorithms = $variables['node']->get('field_sublagorithm')
+              ->getValue();
+            foreach ($sublagorithms as $sublagorithm) {
+              if($sublagorithm['target_id'] == $item6_subalgorithm) {
+                $variables['rows']['row' . $key]['item6']['class'] = 'internal';
+                break;
+              }
+              else{
+                $variables['rows']['row' . $key]['item6']['class'] = 'external';
+              }
+            }
+          }
+          //end of item6
+        }
+      }
+      $variables['rows']['row' . $key]['item1']['boxes'] = $box_number;
+    }
+  }
+}
+
+
+function get_term_name_by_tid($tid) {
+  $term = Term::load($tid);
+  $name = $term->getName();
+  return $name;
+}
+
+function algorithm_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id) {
+  if ($form_id == 'node_algorithm_form' || $form_id == 'node_algorithm_edit_form' || $form_id == 'node_algorithm_quick_node_clone_form') {
+    $form['#attached']['library'][] = 'algorithm/algorithm';
+  }
+}
+
+function algorithm_field_widget_paragraphs_form_alter(&$element, FormStateInterface &$form_state, $context) {
+  //add clear button for item forms
+  switch ($element['#paragraph_type']) {
+    case 'main_row':
+      $i = 1;
+      while ($i <= 6) {
+
+        $element['subform']['field_item_' . $i]['widget'][0]['reset']['#markup'] = '<a href="javascript:" class="clear-btn">Clear</a>';
+        $element['subform']['field_item_' . $i]['widget'][0]['subform']['field_item_title']['#prefix'] = '<h2 class="item-title">Add Item</h2>';
+        $element['subform']['field_item_' . $i]['widget'][0]['reset']['#weight'] = -1;
+        $i++;
+      }
+      break;
+
+    case 'sub_algorithm':
+      $i = 1;
+      while ($i <= 6) {
+        $element['subform']['field_item_' . $i]['widget'][0]['reset']['#markup'] = '<a href="javascript:" class="clear-btn">Clear</a>';
+        $element['subform']['field_item_' . $i]['widget'][0]['subform']['field_item_title']['#prefix'] = '<h2 class="item-title">Add Item</h2>';
+        $element['subform']['field_item_' . $i]['widget'][0]['reset']['#weight'] = -1;
+        $i++;
+      }
+      break;
+  }
+}
+
+function http_check($url) {
+  $return = $url;
+  if ((!(substr($url, 0, 7) == 'http://')) && (!(substr($url, 0, 8) == 'https://'))) {
+    $return = 'http://' . $url;
+  }
+  return $return;
+}
+
+function algorithm_node_view_alter(array &$build, Drupal\Core\Entity\EntityInterface $entity, \Drupal\Core\Entity\Display\EntityViewDisplayInterface $display) {
+  if ($entity->bundle() == 'algorithm') {
+    //turn off cache for algorithms
+    $build['#cache']['max-age'] = 0;
+    \Drupal::service('page_cache_kill_switch')->trigger();
+  }
+}

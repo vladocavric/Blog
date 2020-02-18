@@ -1,0 +1,17 @@
+{
+	"extends": "airbnb-base",
+	"rules": {
+		"no-unused-vars": [
+			"error",
+			{
+				"varsIgnorePattern": "console"
+			}
+		],
+		"parserOptions": {
+			"ecmaVersion": 2017
+		},
+		"env": {
+			"es6": true
+		}
+	}
+}

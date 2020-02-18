@@ -1,0 +1,13 @@
+<%- include("partials/header") %>
+<%- include("partials/nav") %>
+
+<h1>this is a blog list page</h1>
+
+<% blog.reverse().forEach(blog => { %>
+    <img  src="<%= blog.image %> " alt="image">
+    <div >
+        <h2><%= blog.title %> </h2>
+    </div>
+<% }) %>
+
+<%- include("partials/footer") %>

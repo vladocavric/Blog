@@ -1,0 +1,21 @@
+nav {
+	display: flex;
+	background: $secondary-green;
+	justify-content: flex-end;
+	position: sticky;
+	top: 0;
+
+	a {
+		padding: 15px;
+		text-decoration: none;
+		color: #fff;
+
+		&.logo {
+			margin-right: auto;
+		}
+
+		&:hover {
+			background: #90ee90;
+		}
+	}
+}
